@@ -1,0 +1,8 @@
+[package]
+name = "xtunnel"
+version = "0.1.0"
+authors = ["Light Lin <lxrite@gmail.com>"]
+
+[dependencies]
+futures = "0.1.9"
+tokio-core = "0.1.3"
