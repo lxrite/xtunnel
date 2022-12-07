@@ -1,16 +1,16 @@
-extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 
 mod tunnel;
 
-use tunnel::XTunnel;
+use tokio::io;
 
-fn main() {
+#[tokio::main]
+async fn main() -> io::Result<()> {
     let bind_addr = "127.0.0.1:8080".parse().unwrap();
     let remote_addr = "127.0.0.1:8089".parse().unwrap();
-    let tun = XTunnel {
+    let tun = tunnel::XTunnel {
         bind_addr: bind_addr,
         remote_addr: remote_addr,
     };
-    tun.run().unwrap();
+    tun.run().await
 }

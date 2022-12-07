@@ -1,9 +1,6 @@
-use std::io;
 use std::net::SocketAddr;
-use futures::{Future, Stream};
-use tokio_core::reactor::Core;
-use tokio_core::net::{TcpListener, TcpStream};
-use tokio_core::io::{copy, Io};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::io::{self, AsyncWriteExt};
 
 pub struct XTunnel {
     pub bind_addr: SocketAddr,
@@ -11,21 +8,25 @@ pub struct XTunnel {
 }
 
 impl XTunnel {
-    pub fn run(&self) -> io::Result<()>{
-        let mut core = try!(Core::new());
-        let handle = core.handle();
-        let listener = try!(TcpListener::bind(&self.bind_addr, &handle));
-        let server = listener.incoming().for_each(|(client_socket, _)| {
-            let handle_clone = handle.clone();
-            let trans = TcpStream::connect(&self.remote_addr, &handle).map(move |server_socket| {
-                let (client_reader, client_writer) = client_socket.split();
-                let (server_reader, server_writer) = server_socket.split();
-                handle_clone.spawn(copy(client_reader, server_writer).join(copy(server_reader, client_writer)).map(|_| ()).map_err(|_| ()));
+    pub async fn run(&self) -> io::Result<()> {
+        let listener = TcpListener::bind(&self.bind_addr).await?;
+        let remote_addr = self.remote_addr;
+        while let Ok((mut client_socket, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut server_socket = if let Ok(server_socket) = TcpStream::connect(&remote_addr).await { server_socket } else { return };
+                let (mut client_reader, mut client_writer) = client_socket.split();
+                let (mut server_reader, mut server_writer) = server_socket.split();
+                let client_to_server = async {
+                    io::copy(&mut client_reader, &mut server_writer).await?;
+                    server_writer.shutdown().await
+                };
+                let server_to_client = async {
+                    io::copy(&mut server_reader, &mut client_writer).await?;
+                    client_writer.shutdown().await
+                };
+                _ = tokio::try_join!(client_to_server, server_to_client);
             });
-            handle.spawn(trans.map(|_| ()).map_err(|_| ()));
-            Ok(())
-        });
-        try!(core.run(server));
+        };
         Ok(())
     }
 }
