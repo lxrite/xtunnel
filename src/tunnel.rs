@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
-use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{self, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 
 pub struct XTunnel {
     pub bind_addr: SocketAddr,
@@ -13,7 +13,12 @@ impl XTunnel {
         let remote_addr = self.remote_addr;
         while let Ok((mut client_socket, _)) = listener.accept().await {
             tokio::spawn(async move {
-                let mut server_socket = if let Ok(server_socket) = TcpStream::connect(&remote_addr).await { server_socket } else { return };
+                let mut server_socket =
+                    if let Ok(server_socket) = TcpStream::connect(&remote_addr).await {
+                        server_socket
+                    } else {
+                        return;
+                    };
                 let (mut client_reader, mut client_writer) = client_socket.split();
                 let (mut server_reader, mut server_writer) = server_socket.split();
                 let client_to_server = async {
@@ -26,7 +31,7 @@ impl XTunnel {
                 };
                 _ = tokio::try_join!(client_to_server, server_to_client);
             });
-        };
+        }
         Ok(())
     }
 }
